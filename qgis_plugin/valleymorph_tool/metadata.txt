@@ -1,0 +1,17 @@
+[general]
+name=ValleyMorph Tool
+qgisMinimumVersion=3.28
+description=Automated extraction of the transverse topographic symmetry (T-) factor and valley width to valley height (Vf) ratio from a DEM and watershed boundaries.
+about=QGIS port of the ArcGIS ValleyMorph Tool (Daxberger, Dalumpines, Scott & Riller 2014, Computers & Geosciences, doi:10.1016/j.cageo.2014.05.015). For each watershed it builds the watershed midline and main river, crosslines perpendicular to both, and measures midline-to-river and river-to-boundary distances, crossline elevations and valley floor width. Outputs keep the original rt_* names, fields and summary tables. Runs as a Processing algorithm, so it can be used in the model designer, batch mode and PyQGIS scripts. Needs numpy and scipy (bundled with QGIS).
+version=1.0.0
+author=Phillip Ruscica (QGIS port); original ArcGIS tool by Ron Dalumpines
+email=
+homepage=https://github.com/Phillip-Ruscica/ValleyMorphTool-QGIS
+repository=https://github.com/Phillip-Ruscica/ValleyMorphTool-QGIS
+tracker=https://github.com/Phillip-Ruscica/ValleyMorphTool-QGIS/issues
+tags=geomorphology,watershed,valley,dem,hydrology,tectonic geomorphology,processing
+category=Raster
+icon=icon.svg
+experimental=False
+deprecated=False
+hasProcessingProvider=yes

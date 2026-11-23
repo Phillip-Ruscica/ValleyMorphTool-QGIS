@@ -1,3 +1,45 @@
+ValleyMorph Tool — QGIS
+
+This repository is an updated version of the ValleyMorph Tool, adapted for QGIS.
+
+Based on:
+- Original tool: https://github.com/turugban/ValleyMorphTool (turugban, 2014)
+- ArcMap update: https://github.com/Phillip-Ruscica/ValleyMorphTool (Phillip Ruscica, 2023)
+
+The full commit history of the original project is preserved here. All credit for the original method and code goes to the authors of the related article below.
+
+QGIS plugin
+-----------
+
+The qgis_plugin/valleymorph_tool folder is a QGIS plugin that adds the ValleyMorph Tool to the Processing Toolbox (and to the Raster menu). It is a port of the ArcGIS toolbox script (script/arctoolbox/river_transect.py): the same inputs, the same steps in the same order, and the same nine outputs with the same names, fields and summary tables. It needs no ArcGIS licence and no extra Python packages (it uses numpy and scipy, which ship with QGIS). Because it is a Processing algorithm it also works in the Graphical Modeler, in batch mode and from PyQGIS (processing.run("valleymorph:valleymorph", {...})).
+
+Install
+1. Zip the valleymorph_tool folder (the zip must contain the folder itself), or copy the folder into your QGIS plugins directory (Settings > User Profiles > Open Active Profile Folder, then python/plugins).
+2. In QGIS: Plugins > Manage and Install Plugins > Install from ZIP (or enable "ValleyMorph Tool" on the Installed tab if you copied the folder).
+3. The tool appears in the Processing Toolbox under "ValleyMorph Tool" and in Raster > ValleyMorph Tool.
+
+Inputs (same as the ArcGIS tool)
+- Watershed DEM. Should extend at least two cells beyond the watersheds; otherwise elevations on the watershed edge are NoData (-9999).
+- Watershed boundary (polygons, same coordinate system as the DEM; a projected system in meters is expected).
+- Watershed ID: integer field, or text convertible to integer. Leave empty to use the feature ID (the original used a shapefile's FID).
+- Longaxis interval in meters (default 50).
+- Midline and river profile interval (MRPI) in meters (default 500).
+- Number of MRPI (0 = no limit).
+- Adjust for edge effects (shrinks each watershed by two cells).
+- Fill sinks (not in the original tool, off by default). Turn it on when the DEM has not been hydrologically filled and watersheds are skipped with "riverline_connected too short", which happens when the highest flow accumulation falls in a pit inside the watershed. It only changes flow routing (lowpoint and river); elevations and slopes still come from the DEM as given.
+- Output workspace: a GeoPackage (.gpkg), or an ESRI File Geodatabase (.gdb) like the original.
+
+Outputs (same as the ArcGIS tool): rt_rivercrosslines, rt_midcrosslines, rt_watershedmidline, rt_longest_riverline, rt_valleyfloor, rt_elevationpoints, rt_midcrosslinestable, rt_elevationpointstable, rt_valleyfloorwidthtable.
+
+Agreement with the ArcGIS version
+qgis_plugin/tests/compare_with_arcgis.py runs the plugin on the sample data in test/ and compares it with the ArcGIS output in test/output.gdb. On that data the lowpoints, farpoints, watershed midlines and midline crosslines match ArcGIS (88% of the midline summary table values agree to within 1 m, and the rest follow from the river differences below). The main river follows the same course but can differ by a few cells where it crosses large flat areas, because ArcGIS 10.1 does not document how its Flow Direction tool routes flow across flats or breaks ties, and its raster-to-polygon "simplify" option is likewise undocumented. Those small differences carry through to the river crosslines, the valley floor (within 3% of the ArcGIS area) and the valley floor widths and elevations. A few other implementation details:
+- ArcGIS's undocumented raster behaviour was matched to the reference output where possible: ExtractByMask grid alignment, single-cell sink filling, flow off NoData edges, Strahler order on the flow accumulation raster (0 = background), and StreamToFeature line ends half a cell beyond source and outlet cells.
+- Crosslines are geodesic (as in BearingDistanceToLine GEODESIC) but stored as straight two-point lines.
+- When watersheds produce different summary-table columns, the combined table has all columns (ArcGIS's Append dropped columns missing from the first watershed).
+- The extra options in VMT_100_Package (FID range, midline smoothing, per-range output folders and the merger tool) are not part of the port.
+
+----------------------------------------------------------------------
+
 ValleyMorph Tool
 
 Related article: Daxberger, H., Dalumpines, R., Scott, D.M., Riller, U. (in press). The ValleyMorph Tool: An Automated Extraction Tool for Transverse Topographic Symmetry (T-) Factor and Valley Width to Valley Height (Vf) Ratio. Computers & Geosciences, available online 7 June 2014. DOI: 10.1016/j.cageo.2014.05.015

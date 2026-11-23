@@ -844,6 +844,14 @@ def get_riverprofile(ctx, in_raster, localdem, localwatershed, wid, interval, in
     watershedmidline = get_watershedmidline(watershedmidpoints, wid)
     ctx.label("watershedmidline created")
 
+    tecdem_mode = options.get("midline_method") == "TECDEM"
+    if tecdem_mode and options.get("user_midline"):
+        # TecDEM: the basin midline is the one drawn by the user.
+        from . import tecdem
+        watershedmidline = Feat(_line(tecdem.orient_from_outlet(options["user_midline"], lowpoints[0])),
+                                {"WID": wid})
+        ctx.msg("using the supplied midline for watershed ID %i ..." % wid)
+
     # midline profile
     midcrosspoints = create_csectionpoints(ctx, reduced_raster, lowpoints, watershedmidline, wid,
                                            interval_profile, count_intervalpr)
@@ -873,7 +881,17 @@ def get_riverprofile(ctx, in_raster, localdem, localwatershed, wid, interval, in
     vfwtable = get_pivot_table(rivercrosslines, "VFSEGMENT", "Shape_Length")
     ctx.msg("vfw_sumtable created ...")
 
-    return {
+    out = {}
+    if tecdem_mode:
+        from . import tecdem
+        vectors, perps = tecdem.tindex(ctx, _single_path(watershedmidline.geom), longest_riverline.geom,
+                                       watershedpolygon, wid, options.get("tecdem_segment", 2000.0),
+                                       options.get("tecdem_dd_rule", tecdem.RIVER_SIDE))
+        out["rt_tindex"] = vectors
+        out["rt_tindexperp"] = perps
+        ctx.msg("TecDEM T-index calculated for %i segments ..." % len(vectors))
+
+    out.update({
         "rt_rivercrosslines": rivercrosslines,
         "rt_midcrosslines": midcrosslines,
         "rt_watershedmidline": [watershedmidline],
@@ -888,7 +906,8 @@ def get_riverprofile(ctx, in_raster, localdem, localwatershed, wid, interval, in
         "_farpoints": farpoints,
         "_riverline": riverline,
         "_reduced": reduced_raster,
-    }
+    })
+    return out
 
 
 def parse_wid(value):

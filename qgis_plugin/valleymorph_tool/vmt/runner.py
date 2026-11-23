@@ -35,6 +35,14 @@ FEATURE_OUTPUTS = [
      [("MEASURE", "double"), ("WID", "int"), ("SIDE_RIVER", "str"), ("PERTO", "str"),
       ("LOCATION", "str"), ("ELEVATION", "elev")]),
 ]
+# Written only when the TecDEM midline method is selected.
+TECDEM_OUTPUTS = [
+    ("rt_tindex", QgsWkbTypes.MultiLineString,
+     [("WID", "int"), ("SEGMENT", "int"), ("MEASURE", "double"), ("DA", "double"), ("DD", "double"),
+      ("T_INDEX", "double"), ("ORIENT", "double")]),
+    ("rt_tindexperp", QgsWkbTypes.MultiLineString,
+     [("WID", "int"), ("SEGMENT", "int"), ("MEASURE", "double")]),
+]
 TABLE_OUTPUTS = [
     ("rt_midcrosslinestable", "double"),
     ("rt_elevationpointstable", "elev"),
@@ -70,13 +78,18 @@ def run(dem_path, features, crs, fieldname, interval, interval_profile, count_in
     order); crs: their CRS (same as the DEM); fieldname: watershed ID field, or
     None to use feature IDs.
     """
+    options = dict(options or {})
+    tecdem_mode = options.get("midline_method") == "TECDEM"
+    feature_outputs = FEATURE_OUTPUTS + (TECDEM_OUTPUTS if tecdem_mode else [])
+    user_midlines = options.pop("user_midlines", None)
+    midline_field = options.pop("midline_id_field", None)
     ctx = Context(crs, feedback, transform_context)
     in_raster = G.read_raster(dem_path)
     if adjust_edge:
         ctx.warn("reduced inputs by 2 cells to account for edge effects")
     widlist, geoms = list_watershedid(features, fieldname, interval_profile, ctx)
 
-    results = {name: [] for name, _, _ in FEATURE_OUTPUTS}
+    results = {name: [] for name, _, _ in feature_outputs}
     tables = {name: ([], []) for name, _ in TABLE_OUTPUTS}
     done = []
     for n, wid in enumerate(widlist):
@@ -85,6 +98,11 @@ def run(dem_path, features, crs, fieldname, interval, interval_profile, count_in
         ctx.msg("processing watershed ID %i (%i of %i) ..." % (wid, n + 1, len(widlist)))
         local_watershed = geoms[wid]
         local_dem = G.extract_by_mask(in_raster, local_watershed)
+        if tecdem_mode and user_midlines:
+            from .tecdem import pick_midline
+            options["user_midline"] = pick_midline(ctx, user_midlines, local_watershed, wid, midline_field)
+            if options["user_midline"] is None:
+                ctx.warn("no midline drawn for watershed ID %i; using the automatic midline" % wid)
         try:
             out = get_riverprofile(ctx, in_raster, local_dem, local_watershed, wid, interval,
                                    interval_profile, count_intervalpr, adjust_edge, None, options)
@@ -93,7 +111,7 @@ def run(dem_path, features, crs, fieldname, interval, interval_profile, count_in
             if feedback:
                 feedback.setProgress(100.0 * (n + 1) / len(widlist))
             continue
-        for name, _, _ in FEATURE_OUTPUTS:
+        for name, _, _ in feature_outputs:
             results[name].extend(out[name])
         for name, _ in TABLE_OUTPUTS:
             rows, cols = out[name]
@@ -108,7 +126,7 @@ def run(dem_path, features, crs, fieldname, interval, interval_profile, count_in
     if not done:
         raise RuntimeError("no watershed could be processed")
     elev_int = in_raster.is_int
-    write_outputs(output_path, crs, results, tables, elev_int, ctx.tc)
+    write_outputs(output_path, crs, results, tables, elev_int, ctx.tc, feature_outputs)
     ctx.msg("process successfully completed")
     return done
 
@@ -119,11 +137,11 @@ def _qfield(name, kind, elev_int):
     return QgsField(name, _T[kind], len=254 if kind == "str" else 0)
 
 
-def write_outputs(path, crs, results, tables, elev_int, tc):
+def write_outputs(path, crs, results, tables, elev_int, tc, feature_outputs=FEATURE_OUTPUTS):
     is_gdb = path.lower().endswith(".gdb")
     driver = "OpenFileGDB" if is_gdb else "GPKG"
     first = True
-    for name, wkb, schema in FEATURE_OUTPUTS:
+    for name, wkb, schema in feature_outputs:
         fields = QgsFields()
         for fname, kind in schema:
             fields.append(_qfield(fname, kind, elev_int))
